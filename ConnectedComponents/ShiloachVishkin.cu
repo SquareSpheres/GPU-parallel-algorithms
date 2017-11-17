@@ -1,277 +1,284 @@
 #include "device_launch_parameters.h"
 #include "ShiloachVishkin.cuh"
 #include "CudaUtils.cuh"
+#include <iostream>
 
-namespace SV {
-	__global__ void initComponentKernel(int *component, const int numVertices)
+namespace sv {
+
+	__device__ bool has_grafted_d = true;
+
+	__global__ void InitComponentKernel(int *component, const int numVertices)
 	{
-		unsigned int id = getGlobalIdx_3D_3D();
-		unsigned int numThreads = getNumThreads();
+		const unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
+		const unsigned int numThreads = gridDim.x * blockDim.x;
 
-		for (; id < numVertices; id += numThreads) {
-			component[id] = id;
+		for (int i = tid; i < numVertices; i += numThreads) {
+			component[i] = i;
 		}
 	}
 
-
-	__global__ void graftKernel(std::pair<int, int> *graph, const int numEdges, int *component, bool *hasGrafted)
+	__global__ void GraftKernel(std::pair<int, int> *graph, const int numEdges, int *component)
 	{
 
-		unsigned int id = getGlobalIdx_3D_3D();
-		unsigned int numThreads = getNumThreads();
+		const unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
+		const unsigned int numThreads = gridDim.x * blockDim.x;
 
-		*hasGrafted = false;
+		has_grafted_d = false;
 
-		for (; id < numEdges; id += numThreads)
+		for (int i = tid; i < numEdges; i += numThreads)
 		{
+
+			int fromVertex = graph[i].first;
+			int toVertex = graph[i].second;
+
+			int fromComponent = component[fromVertex];
+			int toComponent = component[toVertex];
+
+			if ((fromComponent < toComponent) && (toComponent == component[toComponent]))
 			{
-				const int fromVertex = graph[id].first;
-				const int toVertex = graph[id].second;
+				has_grafted_d = true;
+				component[toComponent] = fromComponent;
 
-				const int fromComponent = component[fromVertex];
-				const int toComponent = component[toVertex];
-
-				if ((fromComponent < toComponent))
-				{
-					*hasGrafted = true;
-					component[toComponent] = fromComponent;
-				}
 			}
 
+
+			const int tmp = fromVertex;
+			fromVertex = toVertex;
+			toVertex = tmp;
+
+			fromComponent = component[fromVertex];
+			toComponent = component[toVertex];
+
+			if ((fromComponent < toComponent) && (toComponent == component[toComponent]))
 			{
-				const int fromVertex = graph[id].second;
-				const int toVertex = graph[id].first;
-
-				const int fromComponent = component[fromVertex];
-				const int toComponent = component[toVertex];
-
-				if ((fromComponent < toComponent))
-				{
-					*hasGrafted = true;
-					component[toComponent] = fromComponent;
-				}
+				has_grafted_d = true;
+				component[toComponent] = fromComponent;
 			}
 		}
-
 	}
 
-	__global__ void shortcutKernel(int *component, int numVertices)
+	__global__ void ShortcutKernel(int *component, const int numVertices)
 	{
 
-		unsigned int id = getGlobalIdx_3D_3D();
-		unsigned int numThreads = getNumThreads();
+		const unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
+		const unsigned int numThreads = gridDim.x * blockDim.x;
 
-		for (; id < numVertices; id += numThreads)
+		for (int i = tid; i < numVertices; i += numThreads)
 		{
-			while (component[id] != component[component[id]])
+			while (component[i] != component[component[i]])
 			{
-				component[id] = component[component[id]];
+				component[i] = component[component[i]];
 			}
 		}
 	}
 
 }
 
-namespace SVU {
 
-	__global__ void initComponentKernel(int *component, const int numVertices)
+namespace svu {
+
+	__device__ bool has_grafted_d = false;
+
+	__global__ void InitComponentKernel(int *component, const int numVertices)
 	{
-		unsigned int id = getGlobalIdx_3D_3D();
-		unsigned int numThreads = getNumThreads();
+		const unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
+		const unsigned int numThreads = gridDim.x * blockDim.x;
 
-		for (; id < numVertices; id += numThreads) {
-			component[id] = id;
+		for (int i = tid; i < numVertices; i += numThreads) {
+			component[i] = i;
 		}
 	}
 
 
-	__global__ void graftKernel(std::pair<int, int> *graph, const int numEdges, int *component, bool *hasGrafted)
+	__global__ void GraftKernel(std::pair<int, int> *graph, const int numEdges, int *component)
 	{
 
-		unsigned int id = getGlobalIdx_3D_3D();
-		unsigned int numThreads = getNumThreads();
+		const unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
+		const unsigned int numThreads = gridDim.x * blockDim.x;
 
-		*hasGrafted = false;
+		has_grafted_d = false;
 
-		for (; id < numEdges; id += numThreads)
+		for (int i = tid; i < numEdges; i += numThreads)
 		{
 			{
-				const int fromVertex = graph[id].first;
-				const int toVertex = graph[id].second;
+				const int fromVertex = graph[i].first;
+				const int toVertex = graph[i].second;
 
 				if (fromVertex < toVertex)
 				{
-					*hasGrafted = true;
+					has_grafted_d = true;
 					component[toVertex] = fromVertex;
 				}
 			}
 
 			{
-				const int fromVertex = graph[id].second;
-				const int toVertex = graph[id].first;
+				const int fromVertex = graph[i].second;
+				const int toVertex = graph[i].first;
 
-				if (fromVertex < toVertex && toVertex == component[toVertex])
+				if (fromVertex < toVertex)
 				{
-					*hasGrafted = true;
+					has_grafted_d = true;
 					component[toVertex] = fromVertex;
 				}
 			}
 		}
 	}
 
-	__global__ void shortcutKernel(int *component, int numVertices)
+	__global__ void ShortcutKernel(int *component, const int numVertices)
 	{
 
-		unsigned int id = getGlobalIdx_3D_3D();
-		unsigned int numThreads = getNumThreads();
+		const unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
+		const unsigned int numThreads = gridDim.x * blockDim.x;
 
-		for (; id < numVertices; id += numThreads)
+		for (int i = tid; i < numVertices; i += numThreads)
 		{
-			while (component[id] != component[component[id]])
+			while (component[i] != component[component[i]])
 			{
-				component[id] = component[component[id]];
+				component[i] = component[component[i]];
 			}
 		}
 	}
 
 
-	__global__ void updateKernel(std::pair<int, int> *graph, const int numEdges, int *component)
+	__global__ void UpdateKernel(std::pair<int, int> *graph, const int numEdges, int *component)
 	{
-		unsigned int id = getGlobalIdx_3D_3D();
-		unsigned int numThreads = getNumThreads();
+		const unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
+		const unsigned int numThreads = gridDim.x * blockDim.x;
 
-		for (; id < numEdges; id += numThreads)
+		for (int i = tid; i < numEdges; i += numThreads)
 		{
-			graph[id].first = component[graph[id].first];
-			graph[id].second = component[graph[id].second];
+			graph[i].first = component[graph[i].first];
+			graph[i].second = component[graph[i].second];
 		}
 	}
 }
 
 
-int* ShiloachVishkinUpdt(std::pair<int, int> *graph, const int numVertices, const int numEdges)
+std::vector<int> ShiloachVishkinUpdt(std::pair<int, int> *graph, const int numVertices, const int numEdges)
 {
 
 	// init device memory
-	std::pair<int, int> *d_graph = 0;
-	int *d_results = 0;
-	bool *d_hasGrafted = 0;
+	std::pair<int, int> *d_graph = nullptr;
+	int *d_results = nullptr;
 
-	int numBytesGraph = numEdges * sizeof(std::pair<int, int>);
-	int numBytesResult = numVertices * sizeof(int);
+	const int numBytesGraph = numEdges * sizeof(std::pair<int, int>);
+	const int numBytesResult = numVertices * sizeof(int);
 
-	cudaMalloc((void **)&d_graph, numBytesGraph);
-	cudaMalloc((void **)&d_results, numBytesResult);
-	cudaMalloc((void **)&d_hasGrafted, sizeof(bool));
+	CHECK(cudaMalloc((void **)&d_graph, numBytesGraph));
+	CHECK(cudaMalloc((void **)&d_results, numBytesResult));
 
 	// init host memory for results
-	int *h_results = new int[numVertices];
-	bool *h_hasGrafted = new bool{ true };
+	std::vector<int> h_results(numVertices);
+	bool has_grafted_h = true;
 	//TODO USE PINNED MEMORY
 
 	// transfer data from host to device
-	cudaMemcpy(d_graph, graph, numBytesGraph, cudaMemcpyHostToDevice);
+	CHECK(cudaMemcpy(d_graph, graph, numBytesGraph, cudaMemcpyHostToDevice));
 
+	int threads_per_block = 1024;
+	int blocks_per_grid = 31;
 
-	// max number of blocks per dim = 65535
-	// max number of threads per block = 1024
-	// figure out optimal block size, and gridsize
+	std::cout << "numThreadsPerBlock = " << threads_per_block << std::endl;
+	std::cout << "numBlock = " << blocks_per_grid << std::endl;
 
-	dim3 threadsPerBlock(1024, 1); // 1024
-	dim3 numBlocks((numEdges + threadsPerBlock.x - 1) / threadsPerBlock.x, 1);
+	svu::InitComponentKernel << <blocks_per_grid, threads_per_block >> > (d_results, numVertices);
+	// check for errors
+	CHECK(cudaGetLastError());
 
-
-	//std::cout << "numThreadsPerBlock = " << threadsPerBlock.x << endl;
-	//std::cout << "numBlock = " << numBlocks.x << endl;
-
-	SVU::initComponentKernel << <numBlocks, threadsPerBlock >> > (d_results, numVertices);
-
-	while (*h_hasGrafted)
+	while (has_grafted_h)
 	{
-		*h_hasGrafted = false;
 		// execute graft kernel
-		SVU::graftKernel << <numBlocks, threadsPerBlock >> > (d_graph, numEdges, d_results, d_hasGrafted);
+		svu::GraftKernel << <blocks_per_grid, threads_per_block >> > (d_graph, numEdges, d_results);
+		// check for errors
+		CHECK(cudaGetLastError());
 		// execute shortcut kernel
-		SVU::shortcutKernel << <numBlocks, threadsPerBlock >> > (d_results, numVertices);
+		svu::ShortcutKernel << <blocks_per_grid, threads_per_block >> > (d_results, numVertices);
+		// check for errors
+		CHECK(cudaGetLastError());
 		// execute update kernel
-		SVU::updateKernel << <numBlocks, threadsPerBlock >> > (d_graph, numEdges, d_results);
+		svu::UpdateKernel << <blocks_per_grid, threads_per_block >> > (d_graph, numEdges, d_results);
+		// check for errors
+		CHECK(cudaGetLastError());
 		// check if has grafted
-		cudaMemcpy(h_hasGrafted, d_hasGrafted, sizeof(bool), cudaMemcpyDeviceToHost);
+		CHECK(cudaMemcpyFromSymbol(&has_grafted_h, svu::has_grafted_d, sizeof(bool), 0, cudaMemcpyDeviceToHost));
 	}
 
 	// copy kernel result back to host side
-	cudaMemcpy(h_results, d_results, numBytesResult, cudaMemcpyDeviceToHost);
+	CHECK(cudaMemcpy(&h_results[0], d_results, numBytesResult, cudaMemcpyDeviceToHost));
+
 
 	// free device memory
-	cudaFree(d_graph);
-	cudaFree(d_results);
-	cudaFree(d_hasGrafted);
-
-	// free host memory
-	delete h_hasGrafted;
+	CHECK(cudaFree(d_graph));
+	CHECK(cudaFree(d_results));
 
 	return h_results;
 }
 
 
-int* ShiloachVishkin(std::pair<int, int> *graph, const int numVertices, const int numEdges)
+std::vector<int> ShiloachVishkin(std::pair<int, int> *graph, const int numVertices, const int numEdges)
 {
 
 	// init device memory
-	std::pair<int, int> *d_graph = 0;
-	int *d_results = 0;
-	bool *d_hasGrafted = 0;
+	std::pair<int, int> *d_graph = nullptr;
+	int *d_results = nullptr;
 
-	int numBytesGraph = numEdges * sizeof(std::pair<int, int>);
-	int numBytesResult = numVertices * sizeof(int);
+	const int numBytesGraph = numEdges * sizeof(std::pair<int, int>);
+	const int numBytesResult = numVertices * sizeof(int);
 
-	cudaMalloc((void **)&d_graph, numBytesGraph);
-	cudaMalloc((void **)&d_results, numBytesResult);
-	cudaMalloc((void **)&d_hasGrafted, sizeof(bool));
+	CHECK(cudaMalloc((void **)&d_graph, numBytesGraph));
+	CHECK(cudaMalloc((void **)&d_results, numBytesResult));
 
 	// init host memory for results
-	int *h_results = new int[numVertices];
-	bool *h_hasGrafted = new bool{ true };
+	std::vector<int> h_results(numVertices);
+	bool has_grafted_h = true;
 	//TODO USE PINNED MEMORY
 
 	// transfer data from host to device
-	cudaMemcpy(d_graph, graph, numBytesGraph, cudaMemcpyHostToDevice);
-
+	CHECK(cudaMemcpy(d_graph, graph, numBytesGraph, cudaMemcpyHostToDevice));
 
 	// max number of blocks per dim = 65535
 	// max number of threads per block = 1024
 	// figure out optimal block size, and gridsize
-
-	dim3 threadsPerBlock(1024, 1); // 1024
-	dim3 numBlocks((numEdges + threadsPerBlock.x - 1) / threadsPerBlock.x, 1);
+	// (numEdges + threadsPerBlock.x - 1) / threadsPerBlock.x
 
 
-	//std::cout << "numThreadsPerBlock = " << threadsPerBlock.x << endl;
-	//std::cout << "numBlock = " << numBlocks.x << endl;
+	// (15) Multiprocessors, (128) CUDA Cores/MP:     1920 CUDA Cores
+	// Maximum number of threads per multiprocessor:  2048
+	// Maximum number of threads per block:           1024
+	// Max dimension size of a thread block(x, y, z): (1024, 1024, 64)
+	// Max dimension size of a grid size(x, y, z):    (2147483647, 65535, 65535)
 
-	SV::initComponentKernel << <numBlocks, threadsPerBlock >> > (d_results, numVertices);
+	int threads_per_block = 1024;
+	int blocks_per_grid = 30;
 
-	while (*h_hasGrafted)
+
+	//std::cout << "numThreadsPerBlock = " << threads_per_block << std::endl;
+	//std::cout << "numBlock = " << blocks_per_grid << std::endl;
+
+	sv::InitComponentKernel << <blocks_per_grid, threads_per_block >> > (d_results, numVertices);
+	// check for errors
+	CHECK(cudaGetLastError());
+
+	while (has_grafted_h)
 	{
-		*h_hasGrafted = false;
 		// execute graft kernel
-		SV::graftKernel << <numBlocks, threadsPerBlock >> > (d_graph, numEdges, d_results, d_hasGrafted);
+		sv::GraftKernel << <blocks_per_grid, threads_per_block >> > (d_graph, numEdges, d_results);
+		// check for errors
+		CHECK(cudaGetLastError());
 		// execute shortcut kernel
-		SV::shortcutKernel << <numBlocks, threadsPerBlock >> > (d_results, numVertices);
-		// check if has grafted
-		cudaMemcpy(h_hasGrafted, d_hasGrafted, sizeof(bool), cudaMemcpyDeviceToHost);
+		sv::ShortcutKernel << <blocks_per_grid, threads_per_block >> > (d_results, numVertices);
+		// check for errors
+		CHECK(cudaGetLastError());
+		// check if hasGrafted
+		CHECK(cudaMemcpyFromSymbol(&has_grafted_h, sv::has_grafted_d, sizeof(bool), 0, cudaMemcpyDeviceToHost));
 	}
 
 	// copy kernel result back to host side
-	cudaMemcpy(h_results, d_results, numBytesResult, cudaMemcpyDeviceToHost);
+	CHECK(cudaMemcpy(&h_results[0], d_results, numBytesResult, cudaMemcpyDeviceToHost));
 
 	// free device memory
-	cudaFree(d_graph);
-	cudaFree(d_results);
-	cudaFree(d_hasGrafted);
-
-	// free host memory
-	delete h_hasGrafted;
+	CHECK(cudaFree(d_graph));
+	CHECK(cudaFree(d_results));
 
 	return h_results;
 }
