@@ -89,7 +89,6 @@ namespace svu {
 		}
 	}
 
-
 	__global__ void GraftKernel(std::pair<int, int> *graph, const int numEdges, int *component)
 	{
 
@@ -100,27 +99,26 @@ namespace svu {
 
 		for (int i = tid; i < numEdges; i += numThreads)
 		{
-			{
-				const int fromVertex = graph[i].first;
-				const int toVertex = graph[i].second;
 
-				if (fromVertex < toVertex)
-				{
-					has_grafted_d = true;
-					component[toVertex] = fromVertex;
-				}
+			int fromVertex = graph[i].first;
+			int toVertex = graph[i].second;
+
+			if (fromVertex < toVertex)
+			{
+				has_grafted_d = true;
+				component[toVertex] = fromVertex;
 			}
 
-			{
-				const int fromVertex = graph[i].second;
-				const int toVertex = graph[i].first;
+			const int tmp = fromVertex;
+			fromVertex = toVertex;
+			toVertex = tmp;
 
-				if (fromVertex < toVertex)
-				{
-					has_grafted_d = true;
-					component[toVertex] = fromVertex;
-				}
+			if (fromVertex < toVertex)
+			{
+				has_grafted_d = true;
+				component[toVertex] = fromVertex;
 			}
+
 		}
 	}
 
@@ -138,7 +136,6 @@ namespace svu {
 			}
 		}
 	}
-
 
 	__global__ void UpdateKernel(std::pair<int, int> *graph, const int numEdges, int *component)
 	{
@@ -175,11 +172,9 @@ std::vector<int> ShiloachVishkinUpdt(std::pair<int, int> *graph, const int numVe
 	// transfer data from host to device
 	CHECK(cudaMemcpy(d_graph, graph, numBytesGraph, cudaMemcpyHostToDevice));
 
-	int threads_per_block = 1024;
-	int blocks_per_grid = 31;
 
-	std::cout << "numThreadsPerBlock = " << threads_per_block << std::endl;
-	std::cout << "numBlock = " << blocks_per_grid << std::endl;
+	int threads_per_block = 1024;
+	int blocks_per_grid = 30;
 
 	svu::InitComponentKernel << <blocks_per_grid, threads_per_block >> > (d_results, numVertices);
 	// check for errors
