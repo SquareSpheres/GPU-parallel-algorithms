@@ -9,10 +9,10 @@ namespace sv {
 
 	__global__ void InitComponentKernel(int *component, const int numVertices)
 	{
-		const unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
-		const unsigned int numThreads = gridDim.x * blockDim.x;
+		const auto tid = blockIdx.x*blockDim.x + threadIdx.x;
+		const auto numThreads = gridDim.x * blockDim.x;
 
-		for (int i = tid; i < numVertices; i += numThreads) {
+		for (auto i = tid; i < numVertices; i += numThreads) {
 			component[i] = i;
 		}
 	}
@@ -20,12 +20,12 @@ namespace sv {
 	__global__ void GraftKernel(std::pair<int, int> *graph, const int numEdges, int *component)
 	{
 
-		const unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
-		const unsigned int numThreads = gridDim.x * blockDim.x;
+		const auto tid = blockIdx.x*blockDim.x + threadIdx.x;
+		const auto numThreads = gridDim.x * blockDim.x;
 
 		has_grafted_d = false;
 
-		for (int i = tid; i < numEdges; i += numThreads)
+		for (auto i = tid; i < numEdges; i += numThreads)
 		{
 
 			int fromVertex = graph[i].first;
@@ -60,10 +60,10 @@ namespace sv {
 	__global__ void ShortcutKernel(int *component, const int numVertices)
 	{
 
-		const unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
-		const unsigned int numThreads = gridDim.x * blockDim.x;
+		const auto tid = blockIdx.x*blockDim.x + threadIdx.x;
+		const auto numThreads = gridDim.x * blockDim.x;
 
-		for (int i = tid; i < numVertices; i += numThreads)
+		for (auto i = tid; i < numVertices; i += numThreads)
 		{
 			while (component[i] != component[component[i]])
 			{
@@ -81,10 +81,10 @@ namespace svu {
 
 	__global__ void InitComponentKernel(int *component, const int numVertices)
 	{
-		const unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
-		const unsigned int numThreads = gridDim.x * blockDim.x;
+		const auto tid = blockIdx.x*blockDim.x + threadIdx.x;
+		const auto numThreads = gridDim.x * blockDim.x;
 
-		for (int i = tid; i < numVertices; i += numThreads) {
+		for (auto i = tid; i < numVertices; i += numThreads) {
 			component[i] = i;
 		}
 	}
@@ -92,12 +92,12 @@ namespace svu {
 	__global__ void GraftKernel(std::pair<int, int> *graph, const int numEdges, int *component)
 	{
 
-		const unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
-		const unsigned int numThreads = gridDim.x * blockDim.x;
+		const auto tid = blockIdx.x*blockDim.x + threadIdx.x;
+		const auto numThreads = gridDim.x * blockDim.x;
 
 		has_grafted_d = false;
 
-		for (int i = tid; i < numEdges; i += numThreads)
+		for (auto i = tid; i < numEdges; i += numThreads)
 		{
 
 			int fromVertex = graph[i].first;
@@ -125,10 +125,10 @@ namespace svu {
 	__global__ void ShortcutKernel(int *component, const int numVertices)
 	{
 
-		const unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
-		const unsigned int numThreads = gridDim.x * blockDim.x;
+		const auto tid = blockIdx.x*blockDim.x + threadIdx.x;
+		const auto numThreads = gridDim.x * blockDim.x;
 
-		for (int i = tid; i < numVertices; i += numThreads)
+		for (auto i = tid; i < numVertices; i += numThreads)
 		{
 			while (component[i] != component[component[i]])
 			{
@@ -139,10 +139,10 @@ namespace svu {
 
 	__global__ void UpdateKernel(std::pair<int, int> *graph, const int numEdges, int *component)
 	{
-		const unsigned int tid = blockIdx.x*blockDim.x + threadIdx.x;
-		const unsigned int numThreads = gridDim.x * blockDim.x;
+		const auto tid = blockIdx.x*blockDim.x + threadIdx.x;
+		const auto numThreads = gridDim.x * blockDim.x;
 
-		for (int i = tid; i < numEdges; i += numThreads)
+		for (auto i = tid; i < numEdges; i += numThreads)
 		{
 			graph[i].first = component[graph[i].first];
 			graph[i].second = component[graph[i].second];
@@ -161,13 +161,14 @@ std::vector<int> ShiloachVishkinUpdt(std::pair<int, int> *graph, const int numVe
 	const int numBytesGraph = numEdges * sizeof(std::pair<int, int>);
 	const int numBytesResult = numVertices * sizeof(int);
 
+	
 	CHECK(cudaMalloc((void **)&d_graph, numBytesGraph));
 	CHECK(cudaMalloc((void **)&d_results, numBytesResult));
 
 	// init host memory for results
 	std::vector<int> h_results(numVertices);
 	bool has_grafted_h = true;
-	//TODO USE PINNED MEMORY
+
 
 	// transfer data from host to device
 	CHECK(cudaMemcpy(d_graph, graph, numBytesGraph, cudaMemcpyHostToDevice));
@@ -177,6 +178,8 @@ std::vector<int> ShiloachVishkinUpdt(std::pair<int, int> *graph, const int numVe
 	int blocks_per_grid = 30;
 
 	svu::InitComponentKernel << <blocks_per_grid, threads_per_block >> > (d_results, numVertices);
+	//synchronize with host
+	CHECK(cudaDeviceSynchronize());
 	// check for errors
 	CHECK(cudaGetLastError());
 
@@ -184,14 +187,20 @@ std::vector<int> ShiloachVishkinUpdt(std::pair<int, int> *graph, const int numVe
 	{
 		// execute graft kernel
 		svu::GraftKernel << <blocks_per_grid, threads_per_block >> > (d_graph, numEdges, d_results);
+		//synchronize with host
+		CHECK(cudaDeviceSynchronize());
 		// check for errors
 		CHECK(cudaGetLastError());
 		// execute shortcut kernel
 		svu::ShortcutKernel << <blocks_per_grid, threads_per_block >> > (d_results, numVertices);
+		//synchronize with host
+		CHECK(cudaDeviceSynchronize());
 		// check for errors
 		CHECK(cudaGetLastError());
 		// execute update kernel
 		svu::UpdateKernel << <blocks_per_grid, threads_per_block >> > (d_graph, numEdges, d_results);
+		//synchronize with host
+		CHECK(cudaDeviceSynchronize());
 		// check for errors
 		CHECK(cudaGetLastError());
 		// check if has grafted
@@ -226,7 +235,6 @@ std::vector<int> ShiloachVishkin(std::pair<int, int> *graph, const int numVertic
 	// init host memory for results
 	std::vector<int> h_results(numVertices);
 	bool has_grafted_h = true;
-	//TODO USE PINNED MEMORY
 
 	// transfer data from host to device
 	CHECK(cudaMemcpy(d_graph, graph, numBytesGraph, cudaMemcpyHostToDevice));
@@ -235,7 +243,6 @@ std::vector<int> ShiloachVishkin(std::pair<int, int> *graph, const int numVertic
 	// max number of threads per block = 1024
 	// figure out optimal block size, and gridsize
 	// (numEdges + threadsPerBlock.x - 1) / threadsPerBlock.x
-
 
 	// (15) Multiprocessors, (128) CUDA Cores/MP:     1920 CUDA Cores
 	// Maximum number of threads per multiprocessor:  2048
@@ -246,11 +253,9 @@ std::vector<int> ShiloachVishkin(std::pair<int, int> *graph, const int numVertic
 	int threads_per_block = 1024;
 	int blocks_per_grid = 30;
 
-
-	//std::cout << "numThreadsPerBlock = " << threads_per_block << std::endl;
-	//std::cout << "numBlock = " << blocks_per_grid << std::endl;
-
 	sv::InitComponentKernel << <blocks_per_grid, threads_per_block >> > (d_results, numVertices);
+	//synchronize with host
+	CHECK(cudaDeviceSynchronize());
 	// check for errors
 	CHECK(cudaGetLastError());
 
@@ -258,10 +263,14 @@ std::vector<int> ShiloachVishkin(std::pair<int, int> *graph, const int numVertic
 	{
 		// execute graft kernel
 		sv::GraftKernel << <blocks_per_grid, threads_per_block >> > (d_graph, numEdges, d_results);
+		//synchronize with host
+		CHECK(cudaDeviceSynchronize());
 		// check for errors
 		CHECK(cudaGetLastError());
 		// execute shortcut kernel
 		sv::ShortcutKernel << <blocks_per_grid, threads_per_block >> > (d_results, numVertices);
+		//synchronize with host
+		CHECK(cudaDeviceSynchronize());
 		// check for errors
 		CHECK(cudaGetLastError());
 		// check if hasGrafted
