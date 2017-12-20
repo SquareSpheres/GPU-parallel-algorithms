@@ -154,6 +154,9 @@ namespace svu {
 std::vector<int> ShiloachVishkinUpdt(std::pair<int, int> *graph, const int numVertices, const int numEdges)
 {
 
+	//Set caching prefrence, prefer L1
+	CHECK(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
+
 	// init device memory
 	std::pair<int, int> *d_graph = nullptr;
 	int *d_results = nullptr;
@@ -221,6 +224,9 @@ std::vector<int> ShiloachVishkinUpdt(std::pair<int, int> *graph, const int numVe
 
 std::vector<int> ShiloachVishkin(std::pair<int, int> *graph, const int numVertices, const int numEdges)
 {
+
+	//Set caching prefrence, prefer L1
+	CHECK(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
 
 	// init device memory
 	std::pair<int, int> *d_graph = nullptr;
