@@ -11,7 +11,7 @@ CUDA algorithms
 #### TODOS
 - <strike>Change from AoS to SoA to increase coalesced memory access</strike> <b>No change</b>
 - <strike>Synchronize between kernel calls to check for errors</strike>
-- Set caching strategy, prefer L1 over Shared
+- <strike>Set caching strategy, prefer L1 over Shared</strike> <b>No change</b>
 - Try to disable/enable L1 cache
  
 <details> 
